@@ -1,0 +1,315 @@
+{
+  "config": {
+    "mode": "retrieval-only",
+    "guard_enabled": false,
+    "index_check": true,
+    "repeat": 2,
+    "embedding_model": "BAAI/bge-large-en-v1.5",
+    "embedding_dim": 1024,
+    "reranker": "C:\\nabeel\\enterprise_rag\\models\\Qwen3-Reranker-0.6B",
+    "reranker_enabled": true,
+    "context_token_budget": 6500
+  },
+  "runs": [
+    {
+      "qid": "short-1",
+      "bucket": "short",
+      "note": "~8 words",
+      "iteration": 0,
+      "chars": 44,
+      "words": 8,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 70.23290000506677,
+        "retrieve": 104.2017999861855,
+        "rerank": 1379.6485000057146,
+        "context": 43.713799997931346
+      },
+      "total_ms": 1597.7969999948982,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 35,
+      "lexical": 8,
+      "reranked": 8,
+      "sources": 12,
+      "context_tokens": 4922,
+      "answer_chars": 0
+    },
+    {
+      "qid": "short-1",
+      "bucket": "short",
+      "note": "~8 words",
+      "iteration": 1,
+      "chars": 44,
+      "words": 8,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 46.35520000010729,
+        "retrieve": 80.5601000029128,
+        "rerank": 1405.5609999923036,
+        "context": 32.41489999345504
+      },
+      "total_ms": 1564.8911999887787,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 35,
+      "lexical": 8,
+      "reranked": 8,
+      "sources": 12,
+      "context_tokens": 4922,
+      "answer_chars": 0
+    },
+    {
+      "qid": "medium-1",
+      "bucket": "medium",
+      "note": "~20 words",
+      "iteration": 0,
+      "chars": 121,
+      "words": 18,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 62.481500004651025,
+        "retrieve": 107.90450000786223,
+        "rerank": 1628.3195999858435,
+        "context": 48.6621999880299
+      },
+      "total_ms": 1847.3677999863867,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 50,
+      "lexical": 5,
+      "reranked": 8,
+      "sources": 12,
+      "context_tokens": 4397,
+      "answer_chars": 0
+    },
+    {
+      "qid": "medium-1",
+      "bucket": "medium",
+      "note": "~20 words",
+      "iteration": 1,
+      "chars": 121,
+      "words": 18,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 54.248300002655014,
+        "retrieve": 92.38199997344054,
+        "rerank": 1577.5385999877471,
+        "context": 39.50010001426563
+      },
+      "total_ms": 1763.6689999781083,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 50,
+      "lexical": 5,
+      "reranked": 8,
+      "sources": 12,
+      "context_tokens": 4397,
+      "answer_chars": 0
+    },
+    {
+      "qid": "medium-2",
+      "bucket": "medium",
+      "note": "~23 words",
+      "iteration": 0,
+      "chars": 134,
+      "words": 17,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 56.81680000270717,
+        "retrieve": 223.72530002030544,
+        "rerank": 729.5654000190552,
+        "context": 45.3982999897562
+      },
+      "total_ms": 1055.505800031824,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 71,
+      "lexical": 9,
+      "reranked": 16,
+      "sources": 12,
+      "context_tokens": 5028,
+      "answer_chars": 0
+    },
+    {
+      "qid": "medium-2",
+      "bucket": "medium",
+      "note": "~23 words",
+      "iteration": 1,
+      "chars": 134,
+      "words": 17,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 48.85319998720661,
+        "retrieve": 215.98770000855438,
+        "rerank": 706.6203999856953,
+        "context": 48.54920000070706
+      },
+      "total_ms": 1020.0104999821633,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 71,
+      "lexical": 9,
+      "reranked": 16,
+      "sources": 12,
+      "context_tokens": 5028,
+      "answer_chars": 0
+    },
+    {
+      "qid": "long-1",
+      "bucket": "long",
+      "note": "~70 words",
+      "iteration": 0,
+      "chars": 503,
+      "words": 72,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 37.231999973300844,
+        "retrieve": 115.98440000670962,
+        "rerank": 2154.4367000169586,
+        "context": 32.779600005596876
+      },
+      "total_ms": 2340.432700002566,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 50,
+      "lexical": 50,
+      "reranked": 8,
+      "sources": 12,
+      "context_tokens": 4602,
+      "answer_chars": 0
+    },
+    {
+      "qid": "long-1",
+      "bucket": "long",
+      "note": "~70 words",
+      "iteration": 1,
+      "chars": 503,
+      "words": 72,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 37.23709998303093,
+        "retrieve": 125.47120000817813,
+        "rerank": 2118.1330000108574,
+        "context": 34.219099994516
+      },
+      "total_ms": 2315.0603999965824,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 50,
+      "lexical": 50,
+      "reranked": 8,
+      "sources": 12,
+      "context_tokens": 4602,
+      "answer_chars": 0
+    },
+    {
+      "qid": "xlong-1",
+      "bucket": "xlong",
+      "note": "~180 words",
+      "iteration": 0,
+      "chars": 1127,
+      "words": 162,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 46.83910001767799,
+        "retrieve": 314.30230001569726,
+        "rerank": 1852.1934000018518,
+        "context": 45.13569999835454
+      },
+      "total_ms": 2258.4705000335816,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 110,
+      "lexical": 2,
+      "reranked": 16,
+      "sources": 12,
+      "context_tokens": 5099,
+      "answer_chars": 0
+    },
+    {
+      "qid": "xlong-1",
+      "bucket": "xlong",
+      "note": "~180 words",
+      "iteration": 1,
+      "chars": 1127,
+      "words": 162,
+      "status": "answered",
+      "trace": [
+        "encode",
+        "retrieve",
+        "rerank",
+        "context"
+      ],
+      "timings": {
+        "encode": 98.71869999915361,
+        "retrieve": 691.0636999818962,
+        "rerank": 1858.5048000095412,
+        "context": 45.18039998947643
+      },
+      "total_ms": 2693.4675999800675,
+      "dim": 1024,
+      "warnings": [],
+      "dense": 110,
+      "lexical": 2,
+      "reranked": 16,
+      "sources": 12,
+      "context_tokens": 5099,
+      "answer_chars": 0
+    }
+  ]
+}

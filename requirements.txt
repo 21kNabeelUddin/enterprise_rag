@@ -1,0 +1,33 @@
+# Runtime dependencies (Python 3.13 / Windows)
+pydantic>=2.9
+pydantic-settings>=2.5
+numpy>=2.0
+orjson>=3.10
+sentence-transformers>=6.0
+torch>=2.6
+transformers>=5.0
+huggingface_hub>=0.30
+sqlalchemy>=2.0.36
+psycopg[binary]>=3.2
+pgvector>=0.3.6
+alembic>=1.14
+typer>=0.15
+rich>=13
+tqdm>=4.66
+python-dotenv>=1.0
+langgraph>=0.6
+fastapi>=0.115
+uvicorn>=0.30
+httpx>=0.27
+
+# Development / tests
+pytest>=8.3
+pytest-cov>=6
+ruff>=0.7
+
+# Optional: only if you use compose.qdrant.yml
+# qdrant-client>=1.12
+
+# Install the local package (rag-ingest / rag-ask entry points).
+# The local LLM is llama.cpp + Qwen3.5-9B GGUF, so vLLM is intentionally absent.
+-e .

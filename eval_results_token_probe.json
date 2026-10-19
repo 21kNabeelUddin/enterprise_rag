@@ -1,0 +1,155 @@
+{
+  "evaluated_at": "2026-10-19T22:09:34",
+  "base_url": "http://127.0.0.1:8080",
+  "summary": {
+    "counts": {
+      "total": 1,
+      "answerable": 1,
+      "refuse": 0,
+      "block": 0
+    },
+    "accuracy": {
+      "answer_rate": 100.0,
+      "refusal_accuracy": 0.0,
+      "guard_detection_rate": 0.0,
+      "overall_behavior_accuracy": 100.0,
+      "grounding_pass_rate": 100.0,
+      "citation_validity_rate": 100.0,
+      "answer_citation_rate": 100.0,
+      "guard_false_positive_rate": 0.0
+    },
+    "latency_ms": {
+      "all": {
+        "mean": 31313.6,
+        "p50": 31313.6,
+        "min": 31313.6,
+        "max": 31313.6,
+        "p95": 31313.6
+      },
+      "answerable": {
+        "mean": 31313.6,
+        "p50": 31313.6,
+        "min": 31313.6,
+        "max": 31313.6,
+        "p95": 31313.6
+      },
+      "per_step_mean": {
+        "history": 19.7,
+        "input_guard": 389.6,
+        "route": 0.1,
+        "rewrite": 2775.2,
+        "encode": 791.2,
+        "retrieve": 152.5,
+        "rerank": 1740.7,
+        "context": 46.0,
+        "generate": 24783.7,
+        "output_guard": 500.0,
+        "finalize": 69.9
+      },
+      "per_step_mean_answerable": {
+        "history": 19.7,
+        "input_guard": 389.6,
+        "route": 0.1,
+        "rewrite": 2775.2,
+        "encode": 791.2,
+        "retrieve": 152.5,
+        "rerank": 1740.7,
+        "context": 46.0,
+        "generate": 24783.7,
+        "output_guard": 500.0,
+        "finalize": 69.9
+      }
+    },
+    "tokens": {
+      "prompt_mean": 5093.0,
+      "completion_mean": 663.0,
+      "generation_tokens_per_s": 26.8
+    },
+    "health": {
+      "status": "ok",
+      "pipeline": "steps-1-14",
+      "embedding_model": "BAAI/bge-large-en-v1.5",
+      "embedding_dim": 1024,
+      "llm_base_url": "http://127.0.0.1:8000/v1",
+      "llm_model": "qwen3.5-9b-local",
+      "guards": [
+        "prompt_guard",
+        "pii"
+      ],
+      "rewrite_enabled": true,
+      "index_checked": true,
+      "retrieval": {
+        "dense_k": 50,
+        "lexical_k": 50,
+        "fused_k": 40,
+        "rrf_k": 60,
+        "top_k": 8,
+        "neighbor_window": 1
+      },
+      "reranker": "Qwen3-Reranker-0.6B",
+      "rerank_device": "cuda",
+      "rerank_enabled": true,
+      "context_token_budget": 6500,
+      "context_tokenizer": "TransformersTokenCounter",
+      "output_guard_enabled": true,
+      "history_enabled": true,
+      "company_filter_enabled": true
+    }
+  },
+  "rows": [
+    {
+      "id": "apple-revenue",
+      "category": "answerable",
+      "query": "What were Apple's main sources of revenue in 2020?",
+      "notes": "factual; Item 7/8",
+      "http_status": 200,
+      "status": "answered",
+      "expected": "answerable",
+      "actual": "answered",
+      "correct": true,
+      "latency_ms": 31313.6,
+      "timings_ms": {
+        "input": 0.01,
+        "authenticate": 0.017,
+        "history": 19.658,
+        "input_guard": 389.607,
+        "route": 0.066,
+        "rewrite": 2775.25,
+        "encode": 791.169,
+        "retrieve": 152.453,
+        "rerank": 1740.748,
+        "context": 46.002,
+        "generate": 24783.659,
+        "output_guard": 499.994,
+        "format": 3.717,
+        "finalize": 69.866
+      },
+      "prompt_tokens": 5093,
+      "completion_tokens": 663,
+      "finish_reason": "stop",
+      "answer_chars": 2634,
+      "citations": 12,
+      "cited_ids": 4,
+      "supplied_ids": 12,
+      "citation_valid": true,
+      "input_guard_allowed": true,
+      "output_guard_allowed": true,
+      "no_answer_phrase": false,
+      "retrieval": {
+        "dense": 50,
+        "lexical": 8,
+        "fused": 54,
+        "reranked": 8,
+        "expanded": 16
+      },
+      "context": {
+        "sources": 12,
+        "neighbors": 4,
+        "tokens": 5007,
+        "truncated": true
+      },
+      "warnings": [],
+      "answer_head": "Based on the provided filings, here are the details regarding Apple Inc.'s primary revenue streams and financial performance for fiscal year 2020:\n\n**Overall Financial Performance**\n*   Total net sales increased by 6%, or $14.3 billion, during 2020 compared to 2019.\n*   This growth was primarily dri"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "label": "cache-on",
+  "summary": {
+    "label": "cache-on",
+    "query": "What are Amazon.com's main risk factors in 2020?",
+    "repeats": 3,
+    "health": {
+      "pipeline": "steps-1-14",
+      "llm_model": "qwen3.5-9b-local",
+      "guards": [
+        "prompt_guard",
+        "pii"
+      ],
+      "rerank_device": "cuda"
+    },
+    "cold": {
+      "http_status": 200,
+      "status": "answered",
+      "wall_ms": 41077.0,
+      "generate_ms": 22689.0,
+      "prompt_tokens": 5040,
+      "cached_tokens": 0,
+      "cache_hit_rate": 0.0,
+      "prompt_eval_ms": 3473.879,
+      "decode_ms": 18180.851,
+      "completion_tokens": 681,
+      "prompt_eval_tokens_per_s": 1450.827734644759,
+      "decode_tokens_per_s": 37.401989598836714,
+      "citations": 12,
+      "answer_chars": 3457
+    },
+    "warm_mean": {
+      "wall_ms": 26531.0,
+      "generate_ms": 19666.6,
+      "prompt_eval_ms": 147.7,
+      "cache_hit_rate": 0.9992,
+      "decode_tokens_per_s": 31.5
+    }
+  },
+  "runs": [
+    {
+      "http_status": 200,
+      "status": "answered",
+      "wall_ms": 41077.0,
+      "generate_ms": 22689.0,
+      "prompt_tokens": 5040,
+      "cached_tokens": 0,
+      "cache_hit_rate": 0.0,
+      "prompt_eval_ms": 3473.879,
+      "decode_ms": 18180.851,
+      "completion_tokens": 681,
+      "prompt_eval_tokens_per_s": 1450.827734644759,
+      "decode_tokens_per_s": 37.401989598836714,
+      "citations": 12,
+      "answer_chars": 3457
+    },
+    {
+      "http_status": 200,
+      "status": "answered",
+      "wall_ms": 29165.7,
+      "generate_ms": 22416.2,
+      "prompt_tokens": 5040,
+      "cached_tokens": 5036,
+      "cache_hit_rate": 0.9992063492063492,
+      "prompt_eval_ms": 139.95,
+      "decode_ms": 21577.699,
+      "completion_tokens": 557,
+      "prompt_eval_tokens_per_s": 28.581636298678102,
+      "decode_tokens_per_s": 25.767344330829715,
+      "citations": 12,
+      "answer_chars": 2809
+    },
+    {
+      "http_status": 200,
+      "status": "answered",
+      "wall_ms": 23896.3,
+      "generate_ms": 16917.0,
+      "prompt_tokens": 5040,
+      "cached_tokens": 5036,
+      "cache_hit_rate": 0.9992063492063492,
+      "prompt_eval_ms": 155.497,
+      "decode_ms": 16249.55,
+      "completion_tokens": 606,
+      "prompt_eval_tokens_per_s": 25.723968951169475,
+      "decode_tokens_per_s": 37.23180026523812,
+      "citations": 12,
+      "answer_chars": 3112
+    }
+  ]
+}

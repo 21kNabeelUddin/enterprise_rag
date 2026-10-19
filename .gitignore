@@ -1,0 +1,93 @@
+# ---------------------------------------------------------------------------
+# Secrets / local configuration
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ---------------------------------------------------------------------------
+# Python virtual environments and packaging
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+.conda/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+*.whl
+pip-wheel-metadata/
+
+# ---------------------------------------------------------------------------
+# Test / lint / type-check caches
+# ---------------------------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Large local data, models and runtime binaries
+# ---------------------------------------------------------------------------
+dataset/
+datasets/
+models/
+tools/llama.cpp/
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.h5
+*.bin
+*.npy
+*.npz
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+
+# ---------------------------------------------------------------------------
+# Logs and temporary artifacts
+# ---------------------------------------------------------------------------
+logs/
+*.log
+*.out
+*.pid
+*.bak
+*.tmp
+*.swp
+*~
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# ---------------------------------------------------------------------------
+# OS / editors / notebooks
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+.ipynb_checkpoints/
+.jupyter/

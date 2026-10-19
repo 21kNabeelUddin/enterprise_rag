@@ -1,0 +1,212 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Enterprise RAG Pipeline</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column; each pipeline is a wide diagram in its own scroll box, followed by a numbered step list that matches the badges. Colors follow the reference legend (blue io, red guardrail, grey step, orange storage); violet marks the shared embedding model. */
+:root{
+  --bg:#f4f6f9; --surface:#ffffff; --fg:#141a22; --muted:#566171; --line:#d3d9e1; --line-strong:#7d8898;
+  --acc:#6a40d4; --acc-bg:#efeafb; --acc-line:#c9bbf0;
+  --io-f:#d8edfb; --io-s:#1f7fc2;
+  --gd-f:#fbdcdc; --gd-s:#c23a3a;
+  --rt-f:#e5e8ed; --rt-s:#778294;
+  --st-f:#fdecc9; --st-s:#c4880f; --st-cont:#fff6e0;
+  --obs-f:#141a22; --obs-t:#f4f6f9; --node-sub:#3a4453;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1217; --surface:#161b22; --fg:#e7ebf1; --muted:#99a3b2; --line:#2c343f; --line-strong:#6d7889;
+    --acc:#a98bff; --acc-bg:#231b3d; --acc-line:#4b3a82;
+    --io-f:#123750; --io-s:#52aae6;
+    --gd-f:#4a1e22; --gd-s:#ee7070;
+    --rt-f:#262c35; --rt-s:#8a95a6;
+    --st-f:#4a3611; --st-s:#e2ac40; --st-cont:#2a2110;
+    --obs-f:#252c37; --obs-t:#e7ebf1; --node-sub:#bcc6d3;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1217; --surface:#161b22; --fg:#e7ebf1; --muted:#99a3b2; --line:#2c343f; --line-strong:#6d7889;
+  --acc:#a98bff; --acc-bg:#231b3d; --acc-line:#4b3a82;
+  --io-f:#123750; --io-s:#52aae6;
+  --gd-f:#4a1e22; --gd-s:#ee7070;
+  --rt-f:#262c35; --rt-s:#8a95a6;
+  --st-f:#4a3611; --st-s:#e2ac40; --st-cont:#2a2110;
+  --obs-f:#252c37; --obs-t:#e7ebf1; --node-sub:#bcc6d3;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);padding-inline:16px;padding-block:32px 80px;-webkit-text-size-adjust:100%}
+main{max-width:1040px;margin-inline:auto;display:flex;flex-direction:column;gap:56px}
+section{display:flex;flex-direction:column;gap:18px;min-width:0}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(30px,5vw,44px);font-weight:600;letter-spacing:-.02em}
+h2{font-size:clamp(21px,3vw,26px);font-weight:600;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:600}
+p{margin:0;max-width:68ch}
+.lede{font-size:18px;color:var(--muted);max-width:62ch}
+header{display:flex;flex-direction:column;gap:14px}
+code,.mono{font-family:var(--mono);font-size:.9em}
+
+.callout{background:var(--acc-bg);border:1px solid var(--acc-line);border-radius:12px;padding:22px clamp(16px,3vw,28px);display:flex;flex-direction:column;gap:12px}
+.callout h2{font-size:clamp(20px,3vw,24px)}
+
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted)}
+.legend li{display:flex;align-items:center;gap:8px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;border:1.5px solid var(--line-strong)}
+.sw.io{background:var(--io-f);border-color:var(--io-s)}
+.sw.gd{background:var(--gd-f);border-color:var(--gd-s)}
+.sw.rt{background:var(--rt-f);border-color:var(--rt-s)}
+.sw.st{background:var(--st-f);border-color:var(--st-s)}
+.sw.acc{background:var(--rt-f);border:2.2px solid var(--acc)}
+
+.dgwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px}
+.hint{display:none;font-size:13px;color:var(--muted)}
+@media (max-width:960px){.hint{display:block}}
+
+svg.dg{display:block;width:100%;min-width:880px;height:auto;font-family:var(--sans)}
+svg .n{stroke-width:1.5}
+svg .io{fill:var(--io-f);stroke:var(--io-s)}
+svg .gd{fill:var(--gd-f);stroke:var(--gd-s)}
+svg .rt{fill:var(--rt-f);stroke:var(--rt-s)}
+svg .st{fill:var(--st-f);stroke:var(--st-s)}
+svg .n.dash{stroke-dasharray:5 4}
+svg .n.acc{stroke:var(--acc);stroke-width:2.4}
+svg .cont{fill:var(--st-cont);stroke:var(--st-s);stroke-width:1.2;stroke-dasharray:2 4}
+svg .t1{fill:var(--fg);font-size:13px;font-weight:600;text-anchor:middle}
+svg .t2{fill:var(--node-sub);font-size:11px;text-anchor:middle}
+svg .lb{fill:var(--muted);font-family:var(--mono);font-size:10.5px}
+svg .lane{fill:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+svg .lane2{fill:var(--node-sub);font-family:var(--mono);font-size:10px;letter-spacing:.04em}
+svg .ar{fill:none;stroke:var(--line-strong);stroke-width:1.6}
+svg .ar.d{stroke-dasharray:5 4}
+svg .ah{fill:var(--line-strong)}
+svg .bd{fill:var(--fg)}
+svg .bn{fill:var(--bg);font-family:var(--mono);font-size:11px;font-weight:600;text-anchor:middle}
+svg .obs{fill:var(--obs-f)}
+svg .obs-t{fill:var(--obs-t);font-family:var(--mono);font-size:11.5px;text-anchor:middle}
+
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px 32px}
+.facts>div{border-top:1px solid var(--line-strong);padding-top:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.facts p{font-size:15px}
+
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px 36px}
+.steps li{display:grid;grid-template-columns:30px 1fr;gap:12px;min-width:0}
+.steps .k{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--line-strong);background:var(--rt-f);font-family:var(--mono);font-size:12px;font-weight:500}
+.steps li[data-kind="io"] .k{background:var(--io-f);border-color:var(--io-s)}
+.steps li[data-kind="gd"] .k{background:var(--gd-f);border-color:var(--gd-s)}
+.steps li[data-kind="rt"] .k{background:var(--rt-f);border-color:var(--rt-s)}
+.steps li[data-kind="st"] .k{background:var(--st-f);border-color:var(--st-s)}
+.steps div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.steps p{font-size:15px;line-height:1.55}
+
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14.5px}
+th,td{text-align:left;vertical-align:top;padding:12px 16px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+td:first-child{font-weight:600;white-space:nowrap}
+
+.sync{display:grid;gap:0}
+.sync>div{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:8px 28px;padding-block:14px;border-top:1px solid var(--line)}
+.sync>div:last-child{border-bottom:1px solid var(--line)}
+@media (max-width:620px){.sync>div{grid-template-columns:1fr}}
+.note{font-size:14px;color:var(--muted)}
+</style>
+
+<main>
+<header>
+  <h1>Enterprise RAG Pipeline</h1>
+  <p class="lede">From a folder of company documents to a cited answer. There are two pipelines and one shared storage layer. Ingestion prepares the knowledge ahead of time, and the question pipeline uses it on every request.</p>
+</header>
+
+<section id="answer">
+  <div class="callout">
+    <h2>Are ingestion and querying separate? Yes.</h2>
+    <p>Document ingestion runs offline. A document is loaded, parsed, split into chunks, embedded and written to storage. That happens when the document is added and again when it changes. It does not wait for a user, and a user's question never triggers it.</p>
+    <p>In the reference diagram, the arrows run from the Encoder and Retrieval into Document ingestion. That reads like "after the query is encoded, ingest documents", which is not a real runtime step. The diagram most likely packs both pipelines into one picture, so ingestion sits next to the storage it fills and is linked to the Encoder because ingestion uses the same embedding model. The arrow is best read as "both sides share a model". It does not describe the order things happen in.</p>
+    <p>Two parts of that picture do happen at query time. History storage and Feedback storage are written after each answer. They record the conversation and are not document ingestion.</p>
+  </div>
+</section>
+
+<section id="overview">
+  <h2>Two processes, one meeting point</h2>
+  <p>The top lane runs on its own schedule. The bottom lane runs on every question. They meet in storage and in one shared choice, the embedding model.</p>
+  <ul class="legend" aria-label="Diagram legend"><li><i class="sw io"></i>Input / output</li><li><i class="sw gd"></i>Guardrail</li><li><i class="sw rt"></i>Processing step</li><li><i class="sw st"></i>Storage</li><li><i class="sw acc"></i>Must use the same embedding model</li></ul>
+  <div class="dgwrap"><svg class="dg" viewBox="0 0 1000 370" role="img" xmlns="http://www.w3.org/2000/svg"><title>Two pipelines sharing one storage layer: ingestion writes it, the question pipeline reads it</title><defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs><text class="lane" x="20" y="22" text-anchor="start">OFFLINE · INGESTION · runs when documents are added or changed</text><rect class="n io" x="20" y="34" width="135" height="60" rx="8"/><text class="t1" x="87.5" y="61.0">Data sources</text><text class="t2" x="87.5" y="78.0">wiki, PDFs, DB, S3</text><rect class="n rt" x="185" y="34" width="135" height="60" rx="8"/><text class="t1" x="252.5" y="61.0">Parse &amp; clean</text><text class="t2" x="252.5" y="78.0">text, tables, OCR</text><rect class="n gd" x="350" y="34" width="135" height="60" rx="8"/><text class="t1" x="417.5" y="61.0">Guard</text><text class="t2" x="417.5" y="78.0">PII, malware scan</text><rect class="n rt" x="515" y="34" width="135" height="60" rx="8"/><text class="t1" x="582.5" y="61.0">Chunk + tag</text><text class="t2" x="582.5" y="78.0">chunks with metadata</text><rect class="n rt acc" x="680" y="34" width="135" height="60" rx="8"/><text class="t1" x="747.5" y="61.0">Embed chunks</text><text class="t2" x="747.5" y="78.0">same model as query</text><rect class="n st" x="845" y="34" width="135" height="60" rx="8"/><text class="t1" x="912.5" y="61.0">Write</text><text class="t2" x="912.5" y="78.0">vectors, text, tags</text><path class="ar" d="M155,64 H185" marker-end="url(#ah3)"/><path class="ar" d="M320,64 H350" marker-end="url(#ah3)"/><path class="ar" d="M485,64 H515" marker-end="url(#ah3)"/><path class="ar" d="M650,64 H680" marker-end="url(#ah3)"/><path class="ar" d="M815,64 H845" marker-end="url(#ah3)"/><path class="ar" d="M912,94 V150" marker-end="url(#ah3)"/><text class="lb" x="920" y="128" text-anchor="start">write</text><rect class="cont" x="20" y="150" width="960" height="88" rx="10"/><text class="lane2" x="34" y="169" text-anchor="start">SHARED STORAGE · the only place the two pipelines meet</text><rect class="n st" x="40" y="180" width="215" height="46" rx="8"/><text class="t1" x="147.5" y="200.0">Embedding storage</text><text class="t2" x="147.5" y="217.0">vector index</text><rect class="n st" x="275" y="180" width="215" height="46" rx="8"/><text class="t1" x="382.5" y="200.0">Document storage</text><text class="t2" x="382.5" y="217.0">chunk text, source files</text><rect class="n st" x="510" y="180" width="215" height="46" rx="8"/><text class="t1" x="617.5" y="200.0">Metadata + ACL</text><text class="t2" x="617.5" y="217.0">owner, groups, tags</text><rect class="n st" x="745" y="180" width="215" height="46" rx="8"/><text class="t1" x="852.5" y="200.0">History + feedback</text><text class="t2" x="852.5" y="217.0">written after each answer</text><text class="lane" x="20" y="278" text-anchor="start">ONLINE · QUERY · runs on every question</text><rect class="n io" x="20" y="290" width="135" height="60" rx="8"/><text class="t1" x="87.5" y="317.0">Question</text><text class="t2" x="87.5" y="334.0">auth + input check</text><rect class="n rt" x="185" y="290" width="135" height="60" rx="8"/><text class="t1" x="252.5" y="317.0">Rewrite query</text><text class="t2" x="252.5" y="334.0">uses chat history</text><rect class="n rt acc" x="350" y="290" width="135" height="60" rx="8"/><text class="t1" x="417.5" y="317.0">Embed query</text><text class="t2" x="417.5" y="334.0">same model as chunks</text><rect class="n rt" x="515" y="290" width="135" height="60" rx="8"/><text class="t1" x="582.5" y="317.0">Search + rerank</text><text class="t2" x="582.5" y="334.0">hybrid, ACL filter</text><rect class="n rt" x="680" y="290" width="135" height="60" rx="8"/><text class="t1" x="747.5" y="317.0">Build prompt</text><text class="t2" x="747.5" y="334.0">question + top chunks</text><rect class="n io" x="845" y="290" width="135" height="60" rx="8"/><text class="t1" x="912.5" y="317.0">LLM answer</text><text class="t2" x="912.5" y="334.0">checked, with sources</text><path class="ar" d="M155,320 H185" marker-end="url(#ah3)"/><path class="ar" d="M320,320 H350" marker-end="url(#ah3)"/><path class="ar" d="M485,320 H515" marker-end="url(#ah3)"/><path class="ar" d="M650,320 H680" marker-end="url(#ah3)"/><path class="ar" d="M815,320 H845" marker-end="url(#ah3)"/><path class="ar" d="M582,290 V238" marker-start="url(#ah3)" marker-end="url(#ah3)"/><text class="lb" x="590" y="268" text-anchor="start">query out, results back</text></svg></div>
+  <p class="hint">Scroll sideways to see the whole diagram.</p>
+  <div class="facts">
+    <div><h3>What they share</h3><p>Storage. Ingestion writes embeddings, text and metadata. The question pipeline only reads them, apart from saving history and feedback.</p></div>
+    <div><h3>What must match</h3><p>The embedding model and its version. If chunks and questions are embedded by different models, their vectors are not comparable and search returns poor matches.</p></div>
+    <div><h3>When each runs</h3><p>Ingestion runs when documents change, usually as batch or background jobs. The question pipeline runs on every request, and each step adds to the response time.</p></div>
+  </div>
+</section>
+
+<section id="ingestion">
+  <h2>Pipeline 1: document ingestion</h2>
+  <p>Runs offline, once per document and again whenever the document changes. Nothing in this pipeline depends on a user question.</p>
+  <ul class="legend" aria-label="Diagram legend"><li><i class="sw io"></i>Input / output</li><li><i class="sw gd"></i>Guardrail</li><li><i class="sw rt"></i>Processing step</li><li><i class="sw st"></i>Storage</li><li><i class="sw acc"></i>Must use the same embedding model</li></ul>
+  <div class="dgwrap"><svg class="dg" viewBox="0 0 1000 426" role="img" xmlns="http://www.w3.org/2000/svg"><title>Document ingestion pipeline from data sources to storage</title><defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="n io" x="20" y="50" width="135" height="70" rx="8"/><text class="t1" x="87.5" y="82.0">Data sources</text><text class="t2" x="87.5" y="99.0">wiki, PDFs, DB, S3</text><circle class="bd" cx="36" cy="50" r="10"/><text class="bn" x="36" y="54">1</text><rect class="n rt" x="185" y="50" width="135" height="70" rx="8"/><text class="t1" x="252.5" y="82.0">Parse &amp; extract</text><text class="t2" x="252.5" y="99.0">OCR, layout, tables</text><circle class="bd" cx="201" cy="50" r="10"/><text class="bn" x="201" y="54">2</text><rect class="n gd" x="350" y="50" width="135" height="70" rx="8"/><text class="t1" x="417.5" y="82.0">Clean &amp; guard</text><text class="t2" x="417.5" y="99.0">dedupe, PII, malware</text><circle class="bd" cx="366" cy="50" r="10"/><text class="bn" x="366" y="54">3</text><rect class="n rt" x="515" y="50" width="135" height="70" rx="8"/><text class="t1" x="582.5" y="82.0">Chunking</text><text class="t2" x="582.5" y="99.0">split by structure</text><circle class="bd" cx="531" cy="50" r="10"/><text class="bn" x="531" y="54">4</text><rect class="n rt" x="680" y="50" width="135" height="70" rx="8"/><text class="t1" x="747.5" y="82.0">Add metadata</text><text class="t2" x="747.5" y="99.0">source, ACL, version</text><circle class="bd" cx="696" cy="50" r="10"/><text class="bn" x="696" y="54">5</text><rect class="n rt acc" x="845" y="50" width="135" height="70" rx="8"/><text class="t1" x="912.5" y="82.0">Embedding model</text><text class="t2" x="912.5" y="99.0">chunk → vector</text><circle class="bd" cx="861" cy="50" r="10"/><text class="bn" x="861" y="54">6</text><path class="ar" d="M155,85 H185" marker-end="url(#ah1)"/><path class="ar" d="M320,85 H350" marker-end="url(#ah1)"/><path class="ar" d="M485,85 H515" marker-end="url(#ah1)"/><path class="ar" d="M650,85 H680" marker-end="url(#ah1)"/><path class="ar" d="M815,85 H845" marker-end="url(#ah1)"/><rect class="n rt" x="20" y="272" width="300" height="64" rx="8"/><text class="t1" x="170.0" y="301.0">Re-index trigger</text><text class="t2" x="170.0" y="318.0">webhook · schedule · file-hash diff</text><path class="ar" d="M87,272 V120" marker-end="url(#ah1)"/><text class="lb" x="95" y="200" text-anchor="start">new, changed or deleted files</text><rect class="cont" x="380" y="240" width="600" height="114" rx="10"/><text class="lane2" x="414" y="262" text-anchor="start">STORAGE · written here, read later by the question pipeline</text><rect class="n st" x="390" y="272" width="136" height="64" rx="8"/><text class="t1" x="458.0" y="301.0">Keyword index</text><text class="t2" x="458.0" y="318.0">BM25, optional</text><rect class="n st" x="538" y="272" width="136" height="64" rx="8"/><text class="t1" x="606.0" y="301.0">Document storage</text><text class="t2" x="606.0" y="318.0">text + source files</text><rect class="n st" x="686" y="272" width="136" height="64" rx="8"/><text class="t1" x="754.0" y="301.0">Metadata + ACL</text><text class="t2" x="754.0" y="318.0">owner, groups, tags</text><rect class="n st" x="834" y="272" width="136" height="64" rx="8"/><text class="t1" x="902.0" y="301.0">Embedding storage</text><text class="t2" x="902.0" y="318.0">vector index</text><circle class="bd" cx="394" cy="240" r="10"/><text class="bn" x="394" y="244">7</text><path class="ar" d="M606,120 V240" marker-end="url(#ah1)"/><text class="lb" x="614" y="185" text-anchor="start">chunk text</text><path class="ar" d="M754,120 V240" marker-end="url(#ah1)"/><text class="lb" x="762" y="185" text-anchor="start">metadata + ACL</text><path class="ar" d="M902,120 V240" marker-end="url(#ah1)"/><text class="lb" x="910" y="185" text-anchor="start">vectors</text><rect class="obs" x="20" y="380" width="960" height="30" rx="15"/><text class="obs-t" x="500" y="399">Observability · ingest logs, failed documents, chunk counts, embedding model version per vector</text></svg></div>
+  <p class="hint">Scroll sideways to see the whole diagram.</p>
+  <ol class="steps"><li data-kind="io"><span class="k">1</span><div><h3>Data sources and connectors</h3><p>Pull documents from wikis, file shares, drives, ticket systems and databases. Keep each document's ID, source URL and last-modified time so changes can be detected later.</p></div></li><li data-kind="rt"><span class="k">2</span><div><h3>Parse and extract</h3><p>Turn PDFs, Word files and web pages into clean text. Keep headings, lists and tables, and run OCR on scanned pages.</p></div></li><li data-kind="gd"><span class="k">3</span><div><h3>Clean and guard</h3><p>Remove boilerplate and duplicates. Scan for malware, and detect or redact personal data and secrets according to your policy before anything is stored.</p></div></li><li data-kind="rt"><span class="k">4</span><div><h3>Chunking</h3><p>Split each document into pieces that are small enough to embed and still make sense on their own. Splitting along headings and paragraphs works better than cutting at a fixed length. A few hundred tokens per chunk with a small overlap is a common starting point.</p></div></li><li data-kind="rt"><span class="k">5</span><div><h3>Add metadata</h3><p>Attach the document ID, title, section, URL, owner, version and the groups allowed to read it (the ACL). This powers filtering, citations and later updates.</p></div></li><li data-kind="rt"><span class="k">6</span><div><h3>Embedding model</h3><p>Convert every chunk into a vector. Record the model name and version with each vector, because the question side has to use the same one.</p></div></li><li data-kind="st"><span class="k">7</span><div><h3>Write to storage</h3><p>Vectors go to embedding storage (a vector index). Chunk text and source files go to document storage, and metadata and ACLs sit alongside. A keyword index can be added for hybrid search.</p></div></li><li data-kind="rt"><span class="k">↻</span><div><h3>Re-index trigger</h3><p>A webhook, a schedule or a file-hash comparison starts the pipeline for new, changed or deleted documents, so the whole corpus is not reprocessed each time.</p></div></li></ol>
+</section>
+
+<section id="query">
+  <h2>Pipeline 2: from question to answer</h2>
+  <p>Runs on every question. Steps are numbered in the order they happen. The top row reads left to right and the bottom row reads right to left, ending at the final response on the left.</p>
+  <ul class="legend" aria-label="Diagram legend"><li><i class="sw io"></i>Input / output</li><li><i class="sw gd"></i>Guardrail</li><li><i class="sw rt"></i>Processing step</li><li><i class="sw st"></i>Storage</li><li><i class="sw acc"></i>Must use the same embedding model</li></ul>
+  <div class="dgwrap"><svg class="dg" viewBox="0 0 1000 606" role="img" xmlns="http://www.w3.org/2000/svg"><title>Question pipeline from user input to final response</title><defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="n io" x="25" y="40" width="150" height="64" rx="8"/><text class="t1" x="100.0" y="69.0">User input</text><text class="t2" x="100.0" y="86.0">chat UI or API</text><circle class="bd" cx="41" cy="40" r="10"/><text class="bn" x="41" y="44">1</text><rect class="n io" x="225" y="40" width="150" height="64" rx="8"/><text class="t1" x="300.0" y="69.0">Authenticate</text><text class="t2" x="300.0" y="86.0">SSO → user + groups</text><circle class="bd" cx="241" cy="40" r="10"/><text class="bn" x="241" y="44">2</text><rect class="n gd" x="425" y="40" width="150" height="64" rx="8"/><text class="t1" x="500.0" y="69.0">Input guardrail</text><text class="t2" x="500.0" y="86.0">injection, PII, policy</text><circle class="bd" cx="441" cy="40" r="10"/><text class="bn" x="441" y="44">3</text><polygon class="n rt" points="700,27 775,72 700,117 625,72"/><text class="t1" x="700" y="70">Expected</text><text class="t1" x="700" y="86">input?</text><circle class="bd" cx="659" cy="52" r="10"/><text class="bn" x="659" y="56">4</text><rect class="n io" x="825" y="40" width="150" height="64" rx="8"/><text class="t1" x="900.0" y="69.0">Fallback reply</text><text class="t2" x="900.0" y="86.0">ends here, no search</text><path class="ar" d="M175,72 H225" marker-end="url(#ah2)"/><path class="ar" d="M375,72 H425" marker-end="url(#ah2)"/><path class="ar" d="M575,72 H625" marker-end="url(#ah2)"/><path class="ar" d="M775,72 H825" marker-end="url(#ah2)"/><text class="lb" x="800" y="63" text-anchor="middle">No</text><path class="ar" d="M700,117 V148 H100 V200" marker-end="url(#ah2)"/><text class="lb" x="708" y="141" text-anchor="start">Yes</text><rect class="n rt" x="25" y="200" width="150" height="64" rx="8"/><text class="t1" x="100.0" y="229.0">Query rewriter</text><text class="t2" x="100.0" y="246.0">uses chat history</text><circle class="bd" cx="41" cy="200" r="10"/><text class="bn" x="41" y="204">5</text><rect class="n rt dash" x="225" y="200" width="150" height="64" rx="8"/><text class="t1" x="300.0" y="229.0">HyDE</text><text class="t2" x="300.0" y="246.0">optional: draft answer</text><circle class="bd" cx="241" cy="200" r="10"/><text class="bn" x="241" y="204">6</text><rect class="n rt acc" x="425" y="200" width="150" height="64" rx="8"/><text class="t1" x="500.0" y="229.0">Encoder</text><text class="t2" x="500.0" y="246.0">same model as docs</text><circle class="bd" cx="441" cy="200" r="10"/><text class="bn" x="441" y="204">7</text><rect class="n rt" x="625" y="200" width="150" height="64" rx="8"/><text class="t1" x="700.0" y="229.0">Retrieval</text><text class="t2" x="700.0" y="246.0">hybrid + ACL filter</text><circle class="bd" cx="641" cy="200" r="10"/><text class="bn" x="641" y="204">8</text><rect class="n rt" x="825" y="200" width="150" height="64" rx="8"/><text class="t1" x="900.0" y="229.0">Rerank</text><text class="t2" x="900.0" y="246.0">cross-encoder, top-k</text><circle class="bd" cx="841" cy="200" r="10"/><text class="bn" x="841" y="204">9</text><path class="ar" d="M175,232 H225" marker-end="url(#ah2)"/><path class="ar" d="M375,232 H425" marker-end="url(#ah2)"/><path class="ar" d="M575,232 H625" marker-end="url(#ah2)"/><path class="ar" d="M775,232 H825" marker-end="url(#ah2)"/><path class="ar d" d="M140,200 V170 H500 V200" marker-end="url(#ah2)"/><text class="lb" x="320" y="184" text-anchor="middle">skip HyDE</text><path class="ar" d="M100,264 V306" marker-start="url(#ah2)" marker-end="url(#ah2)"/><text class="lb" x="108" y="290" text-anchor="start">read history</text><path class="ar" d="M700,264 V306" marker-start="url(#ah2)" marker-end="url(#ah2)"/><text class="lb" x="708" y="290" text-anchor="start">vector + keyword search</text><path class="ar" d="M900,264 V440" marker-end="url(#ah2)"/><text class="lb" x="908" y="356" text-anchor="start">top-k chunks</text><rect class="cont" x="15" y="306" width="770" height="104" rx="10"/><text class="lane2" x="27" y="325" text-anchor="start">SHARED STORAGE · embeddings and documents are filled by the ingestion pipeline, read-only here</text><rect class="n st" x="25" y="336" width="150" height="58" rx="8"/><text class="t1" x="100.0" y="362.0">History storage</text><text class="t2" x="100.0" y="379.0">read + write</text><rect class="n st" x="225" y="336" width="150" height="58" rx="8"/><text class="t1" x="300.0" y="362.0">Feedback storage</text><text class="t2" x="300.0" y="379.0">write</text><rect class="n st" x="425" y="336" width="150" height="58" rx="8"/><text class="t1" x="500.0" y="362.0">Document storage</text><text class="t2" x="500.0" y="379.0">read only</text><rect class="n st" x="625" y="336" width="150" height="58" rx="8"/><text class="t1" x="700.0" y="362.0">Embedding storage</text><text class="t2" x="700.0" y="379.0">read only</text><rect class="n rt" x="825" y="440" width="150" height="64" rx="8"/><text class="t1" x="900.0" y="469.0">Context builder</text><text class="t2" x="900.0" y="486.0">prompt + sources</text><circle class="bd" cx="841" cy="440" r="10"/><text class="bn" x="841" y="444">10</text><rect class="n io" x="625" y="440" width="150" height="64" rx="8"/><text class="t1" x="700.0" y="469.0">Generator</text><text class="t2" x="700.0" y="486.0">LLM, grounded answer</text><circle class="bd" cx="641" cy="440" r="10"/><text class="bn" x="641" y="444">11</text><rect class="n gd" x="425" y="440" width="150" height="64" rx="8"/><text class="t1" x="500.0" y="469.0">Output guardrail</text><text class="t2" x="500.0" y="486.0">grounded? safe? PII?</text><circle class="bd" cx="441" cy="440" r="10"/><text class="bn" x="441" y="444">12</text><rect class="n io" x="225" y="440" width="150" height="64" rx="8"/><text class="t1" x="300.0" y="469.0">Format answer</text><text class="t2" x="300.0" y="486.0">citations, streaming</text><circle class="bd" cx="241" cy="440" r="10"/><text class="bn" x="241" y="444">13</text><rect class="n io" x="25" y="440" width="150" height="64" rx="8"/><text class="t1" x="100.0" y="469.0">Final response</text><text class="t2" x="100.0" y="486.0">to user + save turn</text><circle class="bd" cx="41" cy="440" r="10"/><text class="bn" x="41" y="444">14</text><path class="ar" d="M825,472 H775" marker-end="url(#ah2)"/><path class="ar" d="M625,472 H575" marker-end="url(#ah2)"/><path class="ar" d="M425,472 H375" marker-end="url(#ah2)"/><path class="ar" d="M225,472 H175" marker-end="url(#ah2)"/><path class="ar" d="M100,440 V410" marker-end="url(#ah2)"/><text class="lb" x="108" y="429" text-anchor="start">save turn + feedback</text><path class="ar d" d="M500,504 V528 H700 V504" marker-end="url(#ah2)"/><text class="lb" x="600" y="544" text-anchor="middle">check fails: regenerate or safe fallback</text><rect class="obs" x="25" y="562" width="950" height="30" rx="15"/><text class="obs-t" x="500" y="581">Observability · trace every step: latency, tokens, retrieved chunk IDs, guardrail hits, feedback</text></svg></div>
+  <p class="hint">Scroll sideways to see the whole diagram.</p>
+  <ol class="steps"><li data-kind="io"><span class="k">1</span><div><h3>User input</h3><p>The question arrives from the chat interface or an API.</p></div></li><li data-kind="io"><span class="k">2</span><div><h3>Authenticate</h3><p>Sign-in (SSO or tokens) identifies the user and their groups. Those groups are used later to filter what retrieval may return.</p></div></li><li data-kind="gd"><span class="k">3</span><div><h3>Input guardrail</h3><p>Check for prompt injection, jailbreak attempts, personal data and policy violations, and apply rate limits.</p></div></li><li data-kind="rt"><span class="k">4</span><div><h3>Expected input?</h3><p>A router decides whether this is a question the system should answer. If not (small talk, off-topic or blocked), it returns a fallback reply and stops. No retrieval happens.</p></div></li><li data-kind="rt"><span class="k">5</span><div><h3>Query rewriter</h3><p>Uses the chat history to turn a follow-up such as "and the price?" into a standalone question. It can also split a complex question into sub-queries.</p></div></li><li data-kind="rt"><span class="k">6</span><div><h3>HyDE (optional)</h3><p>An LLM writes a short hypothetical answer, and that text is embedded instead of the question. It can help when questions are short or vague. It adds an LLM call, so many systems skip it.</p></div></li><li data-kind="rt"><span class="k">7</span><div><h3>Encoder</h3><p>Embeds the query with the same model that embedded the chunks at ingestion.</p></div></li><li data-kind="rt"><span class="k">8</span><div><h3>Retrieval</h3><p>Searches the vector index, often combined with keyword search. Results are filtered by the user's groups and any metadata filters, and the top candidates (for example 20 to 50) come back.</p></div></li><li data-kind="rt"><span class="k">9</span><div><h3>Rerank</h3><p>A reranker reads the question and each candidate together and scores them more precisely than vector similarity can. Keep the best handful, for example 5 to 10.</p></div></li><li data-kind="rt"><span class="k">10</span><div><h3>Context builder</h3><p>Assemble the prompt: instructions, the selected chunks labelled with source IDs, and recent chat history, all within the model's token budget.</p></div></li><li data-kind="io"><span class="k">11</span><div><h3>Generator</h3><p>The LLM answers from the supplied context and cites its sources. If the context does not contain the answer, it should say so.</p></div></li><li data-kind="gd"><span class="k">12</span><div><h3>Output guardrail</h3><p>Check that the answer is supported by the retrieved text, contains nothing the user should not see, and follows policy. A failed check triggers a retry or a safe fallback.</p></div></li><li data-kind="io"><span class="k">13</span><div><h3>Format answer</h3><p>Add citations and links, apply formatting, and stream the text to the user.</p></div></li><li data-kind="io"><span class="k">14</span><div><h3>Final response</h3><p>The user sees the answer. The turn is saved to history storage, and thumbs up or down feedback goes to feedback storage.</p></div></li></ol>
+  <p class="note">Observability sits across all fourteen steps. Log a trace per request with timings, token counts, the chunk IDs that were retrieved and every guardrail decision, so a bad answer can be traced back to the step that caused it.</p>
+</section>
+
+<section id="sync">
+  <h2>Keeping both sides in sync</h2>
+  <p>Because the two pipelines only meet in storage, most production problems come from the stored data drifting away from the source documents or from the query side.</p>
+  <div class="sync">
+    <div><h3>The embedding model changes</h3><p>Re-embed every chunk. Build the new index next to the old one, switch queries over once it is complete, then remove the old one.</p></div>
+    <div><h3>A document is updated or deleted</h3><p>Remove its old chunks by document ID before adding the new ones. Without this, answers can quote text that no longer exists.</p></div>
+    <div><h3>Permissions change</h3><p>Update the ACL metadata on the stored chunks and filter by it during retrieval. Filtering inside the prompt is too late, because the model has already seen the text.</p></div>
+  </div>
+</section>
+
+<section id="compare">
+  <h2>How this differs from the reference diagram</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Topic</th><th>Reference diagram</th><th>This version</th></tr></thead>
+    <tbody>
+      <tr><td>Document ingestion</td><td>Drawn after the Encoder and Retrieval, with arrows into it, so it looks like a query-time step.</td><td>Its own pipeline with its own trigger (new or changed documents). Nothing in it depends on a user question.</td></tr>
+      <tr><td>Encoder</td><td>One box in the query path, linked to ingestion.</td><td>Two separate runs of the same embedding model: once per chunk at ingestion, once per question at query time.</td></tr>
+      <tr><td>Storage</td><td>One block, fed by ingestion and read by the query path.</td><td>Same idea with access marked. Embedding and Document storage are read-only for questions. History and Feedback storage are written after each answer.</td></tr>
+      <tr><td>Access control</td><td>Authentication at the start.</td><td>The user's groups travel from login to the retrieval step as a filter that matches the ACL tags added at ingestion.</td></tr>
+      <tr><td>Unexpected input</td><td>Goes straight to the final response generator.</td><td>Gets a fallback reply and skips retrieval.</td></tr>
+      <tr><td>Prompt assembly</td><td>Rerank, then Generator.</td><td>An explicit Context builder step: instructions, chunks with source IDs and chat history under a token budget.</td></tr>
+      <tr><td>Failed output check</td><td>Output guardrail leads to the final response.</td><td>A failed check loops back to regenerate or returns a safe fallback.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="tools">
+  <h2>Example tools for each step</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Step</th><th>Common options</th></tr></thead>
+    <tbody>
+      <tr><td>Connectors</td><td>Native APIs (SharePoint, Confluence, Google Drive), Airbyte, LlamaHub loaders</td></tr>
+      <tr><td>Parsing and OCR</td><td>Apache Tika, Unstructured, Docling, cloud OCR services</td></tr>
+      <tr><td>PII and secret detection</td><td>Microsoft Presidio, cloud data-loss-prevention services</td></tr>
+      <tr><td>Chunking</td><td>Heading-aware or recursive splitters in LangChain or LlamaIndex</td></tr>
+      <tr><td>Embedding models</td><td>OpenAI, Cohere and Voyage embeddings, open models such as BGE and E5</td></tr>
+      <tr><td>Vector storage</td><td>pgvector, Qdrant, Weaviate, Milvus, OpenSearch, Pinecone</td></tr>
+      <tr><td>Reranking</td><td>Cohere Rerank, bge-reranker and other cross-encoders</td></tr>
+      <tr><td>Guardrails</td><td>NeMo Guardrails, Llama Guard, Guardrails AI, or your own checks</td></tr>
+      <tr><td>Observability</td><td>Langfuse, LangSmith, Arize Phoenix, OpenTelemetry</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">These are examples. The pipeline does not depend on any of them. Numbers such as chunk size and top-k vary with your content and models, so treat them as starting points and tune them against real questions from your users.</p>
+</section>
+</main>
+
+</body></html>

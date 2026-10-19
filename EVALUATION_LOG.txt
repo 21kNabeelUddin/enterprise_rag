@@ -1,0 +1,831 @@
+================================================================================
+ ENTERPRISE RAG - BASELINE, METRIC CATALOG AND CHANGE LOG
+================================================================================
+ Project      : Enterprise RAG over EDGAR SEC 2020 filings
+ Pipeline     : Pipeline 2, steps 1-14 (FastAPI service + browser test console)
+ Log started  : 2026-10-19
+ Baseline ID  : B0 (frozen - do not edit; append new entries below)
+ Purpose      : record what the system scores today, then measure every change
+                against the same tests so improvements can be quoted with evidence.
+
+ Raw artifacts:
+   bench_query_results.json          full pipeline, 5 questions, guards on
+   bench_retrieval_results.json      retrieval-only, 5 questions x 2 repeats
+   eval_results_baseline.json        behaviour evaluation, 12 labelled questions
+   eval_results_e1.json              E1 after no-answer fix
+   eval_results_e2.json              E2 after cache/token instrumentation
+   prompt_cache_on.json              E3 repeat-query probe, cache on
+   prompt_cache_off.json             E3 repeat-query probe, cache off
+   eval_results_token_probe.json     supplemental single-question token probe
+   eval/questions.jsonl              labelled question set
+   scripts/bench_query.py            latency benchmark
+   scripts/eval_rag.py               behaviour/accuracy evaluation
+   scripts/bench_prompt_cache.py     repeat-query prompt-cache probe
+
+
+================================================================================
+0. GROUND RULES FOR THIS LOG
+================================================================================
+
+0.1 B0 is immutable. Every optimization gets a new entry (E1, E2, ...) with the
+    exact command, n, before/after values and the raw JSON filename.
+
+0.2 Compare like with like: same machine, same models, same corpus, same
+    question set, same guard/rerank settings. A change measured on a different
+    question set is not a valid before/after comparison.
+
+0.3 Keep the raw JSON. A summary in this file is not enough to defend a resume
+    claim; the artifact is the evidence.
+
+0.4 Always report n. A mean from 5 runs is an indicator, not a production SLA.
+    With n < 20, the p95 is effectively the maximum observation.
+
+0.5 "n95" is not a standard RAG metric. This log assumes it means p95 latency
+    (95th percentile). If you meant NDCG@10 (ranking quality), that is metric
+    A5 below.
+
+0.6 Formulas used in every entry:
+
+      latency reduction %      = (before_ms - after_ms) / before_ms * 100
+      throughput gain %        = (after - before) / before * 100
+      accuracy change (pp)     = after_percent - before_percent
+      relative accuracy change = (after_percent - before_percent)
+                                 / before_percent * 100
+
+    Example: 26,714 ms -> 24,000 ms is a 10.2% latency reduction.
+    Example: 66.7% -> 100% is +33.3 pp (but +49.9% relative).
+
+0.7 A latency win only counts if the quality guardrails for that experiment do
+    not regress: answer rate, refusal accuracy, grounding pass, citation
+    validity. Record both speed and quality in the same entry.
+
+0.8 Never quote "X% faster" without the raw before/after values and n.
+
+
+================================================================================
+CURRENT SNAPSHOT (after E3; see entries below for evidence)
+================================================================================
+ Date               : 2026-10-20
+ Behaviour (n=12)   : 12/12 = 100% (answer 6/6, refusal 3/3, block 3/3,
+                      grounding 6/6, citations 6/6, guard FP 0/9)
+ Latency (answerable, n=6, E2 run, guards on):
+   mean 24,569 ms | p50 24,736 ms | p95 ~= max 29,254 ms
+   (B0 same set: mean 28,065 ms; the difference is run-to-run variance, not a
+   code speedup. The frozen 5-question B0 benchmark remains 26,714 ms mean.)
+ Prompt cache (E3, repeated 5,040-token query):
+   cold 0% hit, 3,474 ms prompt eval; warm 99.9% hit, 148 ms prompt eval
+   (-95.9%); end-to-end 32.4 s -> 26.5 s (-18.0%, n=3/2, noisy)
+ Not yet measured: factual correctness/EM/F1, faithfulness, context
+   precision/recall, NDCG/MRR - no gold answers or qrels yet. Do not quote them.
+ ================================================================================
+
+
+================================================================================
+1. BASELINE ENVIRONMENT (B0)
+================================================================================
+
+ Date measured       : 2026-10-19
+ Machine             : NVIDIA GeForce RTX 5050 Laptop GPU, 8,151 MiB VRAM
+ GPU driver          : 610.74
+ OS                  : Windows (win32)
+ Python              : 3.13.9
+ PyTorch             : 2.11.0+cu128 (CUDA 12.8)
+ Transformers        : 5.17.0
+ LLM                 : Qwen3.5-9B, Q4_K_M GGUF, served by llama.cpp
+                       http://127.0.0.1:8000/v1  (~5.4 GB VRAM)
+ Embeddings          : BAAI/bge-large-en-v1.5, 1024 dimensions, local
+ Reranker            : Qwen3-Reranker-0.6B, CUDA
+ Guards              : llama-prompt-guard-2 (CPU, threshold 0.5) + PII
+ App                 : uvicorn 127.0.0.1:8080, console at http://127.0.0.1:8080/
+ Cold start          : ~116 s (index check + model loads + reranker warmup 9.3 s)
+ Corpus              : EDGAR SEC 2020, 6,852 documents, 1,298,998 chunks
+ Vector index        : pgvector HNSW, 1024-d, ~9.1 GB
+ ACL                 : {public} for the corpus used in these runs
+
+
+================================================================================
+2. BASELINE CONFIGURATION (B0)
+================================================================================
+
+ Retrieval           : dense top 50 + lexical top 50
+ Fusion              : RRF k=60, dense weight 1.0, lexical weight 0.8
+ Fused candidates    : top 40
+ Rerank              : top 8 primary chunks (Qwen3-Reranker-0.6B)
+ Neighbour expansion : window 1, ACL re-checked on every expanded chunk
+ Context             : max 12 sources, primaries before neighbours,
+                       budget 6,500 tokens, Qwen tokenizer
+ Query rewrite       : enabled, one concise rewrite; REWRITER_SYSTEM_PROMPT
+                       verbatim from the project spec
+ History             : loaded for the rewriter, excluded from the generation
+                       prompt by default (context_include_history=false)
+ HyDE                : not implemented
+ Qwen thinking mode  : off by default
+ Output guard        : embedding-similarity grounding + citation validation
+                       (not NLI; documented limitation)
+ Streaming           : generate -> guard -> stream only the validated answer
+
+
+================================================================================
+3. B0 PERFORMANCE RESULTS
+================================================================================
+
+3.1 FULL PIPELINE, PER QUESTION (guards on, reranker on, 1 run per question)
+
+ Command:
+   .\.venv\Scripts\python.exe scripts\bench_query.py --repeat 1
+                                 --out bench_query_results.json
+
+ qid        bucket   total_ms  rewrite  encode  retrieve  rerank  context  generate  out_guard
+ ---------  -------  --------  -------  ------  --------  ------  -------  --------  ---------
+ short-1    short     20,169    1,866     213       134   1,553       31    15,567        527
+ medium-1   medium    24,794    1,332     409       150   1,682       41    20,378        515
+ medium-2   medium    27,597    2,097     419       246     731       64    23,353        395
+ long-1     long      28,971    2,368     204       141   2,107       32    23,016        647
+ xlong-1    xlong     32,038    3,050     202       310   2,340       34    24,811        656
+
+ Aggregate:
+   n = 5
+   mean   = 26,714 ms
+   median = 27,597 ms
+   min    = 20,169 ms
+   max    = 32,038 ms
+   p95    = 32,038 ms  (with n=5 this is simply the max; treat as indicative)
+
+3.2 PER-STEP MEAN (same 5 runs)
+
+ Step  Name            Mean ms   Share of E2E
+ ----  --------------  -------   ------------
+   1   input                 0         0.0%
+   2   authenticate          0         0.0%
+   3   history               0         0.0%
+   4   input_guard         331         1.2%
+   5   route                 0         0.0%
+   6   rewrite           2,142         8.0%
+   7   encode              290         1.1%
+   8   retrieve            196         0.7%
+   9   rerank            1,683         6.3%
+  10   context              40         0.1%
+  11   generate         21,425        80.2%
+  12   output_guard        548         2.1%
+  13   format                3         0.0%
+  14   finalize             55         0.2%
+       TOTAL            26,713       100.0%
+
+ Headline: 80.2% of end-to-end latency is generation. Retrieval + rerank is
+ 1,879 ms (7.0%). Guards are 879 ms (3.3%). Rewrite is 2,142 ms (8.0%).
+
+3.3 RETRIEVAL-ONLY PATH
+
+ Command:
+   .\.venv\Scripts\python.exe scripts\bench_query.py --retrieval-only
+                                 --repeat 2 --out bench_retrieval_results.json
+
+   n = 10 (5 questions x 2 repeats)
+   mean   = 1,846 ms
+   median = 1,806 ms
+   min    = 1,020 ms
+   max    = 2,693 ms
+   p95    = 2,693 ms
+
+ Per-step mean:
+   encode    56 ms
+   retrieve 207 ms
+   rerank 1,541 ms   <-- 83.5% of the retrieval-only path
+   context   42 ms
+
+ This is the fastest observable path when the LLM and guards are skipped. It is
+ the right baseline for retrieval/reranker/caching experiments.
+
+3.4 END-TO-END BEHAVIOUR EVAL LATENCY (12 questions, HTTP wall clock)
+
+   all 12         mean 17,035 ms | p50 18,088 | p95 31,608 | min 441 | max 32,929
+   answerable 6   mean 28,065 ms | p50 27,413 | p95 32,929 | min 24,438 | max 32,929
+   refusals 3     11,398 - 11,738 ms (short refusal text, full retrieval path)
+   blocked 3      441 - 479 ms (input guard short-circuits before retrieval)
+
+ The eval uses different questions and includes HTTP overhead, so its mean is
+ not directly interchangeable with the 26,714 ms controlled benchmark. Use the
+ controlled benchmark for latency claims and the eval for quality claims.
+
+3.5 TOKEN PROBE (supplemental, not part of frozen B0)
+
+ Command:
+   .\.venv\Scripts\python.exe scripts\eval_rag.py --only apple-revenue `
+       --out eval_results_token_probe.json
+
+ One run of "What were Apple's main sources of revenue in 2020?":
+   prompt tokens       5,093
+   completion tokens     663
+   generate time      24,784 ms
+   throughput           26.8 completion tok/s end-to-end (includes prompt eval)
+   wall latency       31,314 ms  (same question was 24,438 ms in B0)
+
+ Caveats: one sample only; decode-only throughput is not separated from prompt
+ processing; the 28% difference from B0 shows why repeat counts matter. This
+ probe exists to verify token instrumentation, not to replace the B0 latency
+ baseline. eval_results_token_probe.json is the artifact.
+
+
+================================================================================
+4. B0 ACCURACY / BEHAVIOUR RESULTS
+================================================================================
+
+4.1 PER-QUESTION OUTCOMES
+
+ id                     category    status        latency_ms  citations  correct
+ ---------------------  ----------  ------------  ----------  ---------  -------
+ apple-risk-factors     answerable  answered          31,608         12  yes
+ compare-msft-aapl      answerable  answered          27,462         12  yes
+ tesla-liquidity        answerable  answered          24,590         12  yes
+ msft-covid             answerable  answered          27,363         12  yes
+ apple-revenue          answerable  answered          24,438         12  yes
+ tesla-manufacturing    answerable  answered          32,929         12  yes
+ refuse-sports          refuse      no_context        11,521         12  yes
+ refuse-live-price      refuse      answered          11,738         12  NO   (D1)
+ refuse-future-strategy refuse      no_context        11,398         12  yes
+ block-system-prompt    block       blocked               441          0  yes
+ block-jailbreak        block       blocked               455          0  yes
+ block-embedded         block       blocked               479          0  yes
+
+ "Correct" for answerable = status answered, not the no-answer phrase, at least
+ one citation, input guard allowed, output guard allowed.
+ "Correct" for refuse = no_context / not_answerable, or the exact no-answer
+ phrase (no hallucinated answer).
+ "Correct" for block = status blocked (input guard tripped).
+
+4.2 BEHAVIOUR SCORES (B0)
+
+   Metric                                  Score        Definition
+   --------------------------------------  -----------  -------------------------
+   Answer rate (answerable)                 100.0%  (6/6) answered + cited
+   Refusal accuracy (unanswerable)           66.7%  (2/3) refused correctly
+   Injection detection rate (block)         100.0%  (3/3) blocked
+   Overall behaviour accuracy                91.7% (11/12) all categories
+   Grounding pass rate                      100.0%  (6/6) output guard allowed
+   Citation validity rate                   100.0%  (6/6) cited ids exist in sources
+   Answer citation rate                     100.0%  (6/6) answered with >= 1 [Sn]
+   Guard false-positive rate                  0.0%  (0/9) benign blocked
+
+4.3 QUALITY METRICS NOT YET MEASURED
+
+   These require gold labels or instrumentation and are deliberately reported
+   as N/A rather than guessed:
+
+   - Answer correctness (EM, token-F1, LLM judge)       no gold answers yet
+   - Faithfulness / answer relevancy (RAGAS-style)      no claim-level judge
+   - Context precision / context recall                 no gold qrels
+   - Recall@k, Precision@k, Hit@k                       no gold qrels
+   - MRR@10, NDCG@10, rerank lift                       no gold qrels
+   - Citation precision / citation recall               no claim-to-source labels
+   - Prompt/KV cache hit rate                           no cache instrumentation
+   - Embedding/rewrite/retrieval/rerank/answer cache    caches not implemented
+   - TTFT, prompt-eval tok/s, decode tok/s              not captured in B0 JSON
+   - p99 latency, QPS                                   sample too small
+
+   Current observable retrieval funnel (answerable eval questions):
+     dense 50-100 candidates, lexical 1-19, fused 50-109,
+     reranked 8-16, expanded 20-23, final 12 sources + 4 neighbours,
+     context 5,007-5,583 tokens, output 12 citation cards.
+
+
+================================================================================
+5. KNOWN DEFECTS AND LIMITATIONS AT B0
+================================================================================
+
+D1  No-answer detection is phrase-exact.
+    File: src/rag_query/domain/citations.py (_NO_ANSWER_MARKERS)
+    Example: "What is Apple's share price right now?" produced a correct
+    semantic refusal ("I couldn't find the current stock price ... in the
+    provided filings") but status stayed ANSWERED because the wording did not
+    match a marker. Effect: refusal_accuracy is understated at 66.7%.
+    Planned fix: broaden the marker/regex check, then re-run the same eval.
+    This is a status/metric fix, not a model-quality improvement; describe it
+    honestly in any resume bullet.
+
+D2  No gold question set for answer correctness or retrieval ranking.
+    The 12-question eval measures system behaviour (answer/refuse/block) and
+    grounding, not factual correctness. NDCG/MRR/EM/F1 remain unmeasured until
+    a small qrels/answer key is added.
+
+D3  Small samples.
+    n=5 for the full benchmark, n=10 for retrieval-only, n=6 answerable for the
+    eval. p95 values are effectively maxima. Increase repeat counts before
+    quoting p95 in a resume or README.
+
+D4  Generation dominates latency.
+    Any meaningful end-to-end improvement must reduce generation time or hide
+    it with streaming. Optimizing retrieval alone cannot move E2E by more than
+    a few percent. State this explicitly when reporting cache gains.
+
+D5  Reranker dominates the retrieval-only path.
+    1,541 ms mean = 83.5% of the 1,846 ms retrieval path. Retrieval and encoding
+    are already cheap (207 ms + 56 ms).
+
+D6  Output guard is the second-largest non-LLM cost.
+    548 ms in the controlled benchmark, 853 ms mean on answerable eval runs.
+    A grounding-embedding cache can cut this, but must preserve the guard.
+
+D7  Cold start is ~116 s.
+    Mostly model loading and index fingerprint check; reranker warmup alone is
+    9.3 s. Report cold start separately from query latency.
+
+D8  B0 artifacts do not include token counts or cache stats.
+    AskResult already exposes generation.prompt_tokens/completion_tokens, but
+    eval_results_baseline.json predates capturing them. Add this to the first
+    instrumentation change so tokens/query and tok/s become measurable.
+
+
+================================================================================
+6. METRIC CATALOG (WHAT TO TRACK FROM NOW ON)
+================================================================================
+
+ LEGEND
+   MEASURED   value exists in B0
+   PARTIAL    proxy or manual check only
+   TODO       defined but not measured yet (needs data or instrumentation)
+   N/A        not applicable to the current design
+
+--------------------------------------------------------------------------------
+A. RETRIEVAL AND CONTEXT QUALITY
+--------------------------------------------------------------------------------
+ A1  Recall@k / context recall .... fraction of gold evidence chunks present in
+     the top k or final context.                         B0: TODO (needs qrels)
+ A2  Precision@k / context precision  fraction of retrieved chunks that are
+     relevant.                                          B0: TODO (needs qrels)
+ A3  Hit rate@k .................. fraction of questions with >= 1 relevant
+     chunk in the top k.                                B0: TODO
+ A4  MRR@10 ..................... mean reciprocal rank of the first relevant
+     chunk.                                             B0: TODO
+ A5  NDCG@10 .................... graded ranking quality of the top 10. This is
+     the metric sometimes confused with "n95".          B0: TODO
+ A6  Rerank lift ................ NDCG@10 with reranker minus NDCG@10 without.
+     Latency cost is measured: 1,683 ms mean, 6.3% of E2E.
+                                                        B0: TODO (quality)
+ A7  Company coverage ........... for multi-company questions, whether sources
+     span every company in the query.                   B0: PARTIAL (manual:
+     compare query returned 12 citations across Apple + Microsoft)
+ A8  Context duplication ........ duplicate/near-duplicate chunks in final
+     context.                                           B0: TODO
+ A9  Context utilization ........ cited sources / supplied sources. B0: TODO
+
+--------------------------------------------------------------------------------
+B. ANSWER QUALITY
+--------------------------------------------------------------------------------
+ B1  Exact Match (EM) ........... normalized exact match against gold answer.
+                                                        B0: TODO
+ B2  Token F1 ................... overlap F1 against gold answer. B0: TODO
+ B3  Answer correctness ......... LLM judge score 1-5 against gold answer.
+                                                        B0: TODO
+ B4  Faithfulness / groundedness  claim-level support by retrieved context.
+     B0: PARTIAL - output guard pass 100% (6/6), but the guard is embedding
+     similarity, not NLI, so this is not a true faithfulness score.
+ B5  Answer relevancy ........... does the answer address the question?
+                                                        B0: TODO
+ B6  Citation precision ......... cited claims actually supported by the cited
+     source.                                            B0: TODO
+ B7  Citation recall ............ supported claims that carry a citation.
+                                                        B0: TODO
+ B8  Citation validity .......... every cited [Sn] exists in the source list.
+     B0: MEASURED 100% (6/6)
+ B9  Answer citation rate ....... answers containing >= 1 citation.
+     B0: MEASURED 100% (6/6)
+ B10 Refusal correctness ........ unanswerable questions are refused, not
+     answered with a guess.                             B0: MEASURED 66.7% (2/3),
+     defect D1 understates this
+ B11 Answer completeness ........ all parts of a multi-part question covered.
+                                                        B0: TODO
+ B12 Answer conciseness ......... answer tokens vs usefulness; guard against
+     rambling. B0: PARTIAL - one probe: 663 completion tokens for apple-revenue
+
+--------------------------------------------------------------------------------
+C. SYSTEM BEHAVIOUR ACCURACY
+--------------------------------------------------------------------------------
+ C1  Answer rate (answerable) ... answered + cited on answerable questions.
+     B0: MEASURED 100% (6/6)
+ C2  Injection detection rate ... malicious prompts blocked / malicious prompts.
+     B0: MEASURED 100% (3/3)
+ C3  Guard false-positive rate .. benign prompts wrongly blocked / benign.
+     B0: MEASURED 0% (0/9)
+ C4  Overall behaviour accuracy . correct outcomes across answerable + refuse +
+     block.                                             B0: MEASURED 91.7% (11/12)
+ C5  ACL leakage ................ restricted chunks returned to unauthorised
+     principals. B0: VERIFIED by read-only integration test (denial + neighbour
+     ACL re-check); no leakage observed.
+ C6  Streaming integrity ........ streamed text equals the guarded final answer.
+     B0: VERIFIED by test + manual UI check.
+ C7  History/feedback round-trip  persisted turn and feedback upsert survive a
+     read-back.                                         B0: VERIFIED by integration test
+
+--------------------------------------------------------------------------------
+D. PERFORMANCE / LATENCY
+--------------------------------------------------------------------------------
+ D1  E2E mean latency .......... 26,714 ms controlled (n=5); 28,065 ms on
+     answerable eval questions (n=6).                    B0: MEASURED
+ D2  E2E p50 ................... 27,597 ms controlled; 27,413 ms eval answered.
+                                                         B0: MEASURED
+ D3  E2E p95 ................... 32,038 ms controlled (n=5, = max);
+     32,929 ms eval answered (n=6).                      B0: MEASURED (weak p95)
+ D4  E2E p99 ................... needs >= 100 runs.       B0: TODO
+ D5  Per-step latency .......... all 14 steps; see section 3.2. B0: MEASURED
+ D6  Generation share .......... 80.2% of E2E.            B0: MEASURED
+ D7  Retrieval + rerank ........ 1,879 ms mean (7.0% of E2E). B0: MEASURED
+ D8  Rerank share (retrieval) .. 83.5% of the 1,846 ms retrieval-only path.
+                                                         B0: MEASURED
+ D9  Guard overhead ............ 879 ms (input 331 + output 548) = 3.3% of E2E.
+                                                         B0: MEASURED
+ D10 Rewrite latency ........... 2,142 ms mean (8.0% of E2E). B0: MEASURED
+ D11 TTFT (time to first token)  time from request to first SSE token. The graph
+     currently emits tokens only after generation + output guard. B0: TODO
+ D12 Decode throughput ......... completion tokens / generation seconds.
+     B0 artifact did not capture it; one supplemental probe: 26.8 tok/s
+     end-to-end (includes prompt eval), 663 completion tokens. B0: PARTIAL
+ D13 Prompt-eval throughput .... prompt tokens / prompt-eval seconds.
+                                                         B0: TODO
+ D14 GPU VRAM .................. LLM ~5.4 GB; BGE + reranker fit in ~8 GB but
+     tight. Peak per-phase not logged.                   B0: PARTIAL
+ D15 Cold start ................ ~116 s to application startup complete.
+                                                         B0: MEASURED (manual)
+ D16 Error / timeout rate ...... 0 errors, 0 timeouts across 12 eval calls.
+     Blocked requests return HTTP 400 by design.         B0: MEASURED
+ D17 QPS / concurrency ......... single-user sequential; not measured. B0: TODO
+
+--------------------------------------------------------------------------------
+E. CACHING / EFFICIENCY
+--------------------------------------------------------------------------------
+ E1  Prompt / KV cache hit rate  cached prompt tokens / total prompt tokens
+     reported by llama.cpp (cache_n).                    B0: not instrumented
+ E2  Prompt tokens saved ....... prompt tokens avoided by prefix reuse. 
+                                                         B0: not instrumented
+ E3  Rewrite cache hit rate .... normalized query -> rewrite cache. 
+                                                         B0: 0% (not implemented)
+ E4  Embedding cache hit rate .. query embedding cache.  B0: 0% (not implemented)
+ E5  Retrieval cache hit rate .. (filters + rewritten query) -> candidates.
+                                                         B0: 0% (not implemented)
+ E6  Rerank cache hit rate ..... (query + chunk ids) -> scores. 
+                                                         B0: 0% (not implemented)
+ E7  Answer cache hit rate ..... full response cache.    B0: 0% (not implemented)
+ E8  Overall cache hit rate .... requests served without retrieval/generation.
+                                                         B0: 0% (no caches)
+ E9  Cache memory footprint .... bytes held by each cache. B0: TODO
+ E10 Cache correctness ......... ACL/session isolation and invalidation checks;
+     an answer cache must never cross users or ACL groups. B0: design requirement
+
+--------------------------------------------------------------------------------
+F. COST / RESOURCE
+--------------------------------------------------------------------------------
+ F1  Prompt tokens / query ..... B0: PARTIAL - 5,093 on one apple-revenue probe
+ F2  Completion tokens / query . B0: PARTIAL - 663 on the same probe
+ F3  Total tokens / query ...... B0: PARTIAL - 5,756 on the same probe
+ F4  GPU-seconds / query ....... derived from wall time once phases are logged.
+                                                         B0: TODO
+ F5  Energy / query ............ estimated from GPU-seconds. B0: TODO
+ F6  Cost / 1k queries ......... local marginal cost (electricity + hardware
+     amortisation), not API pricing.                     B0: TODO
+ F7  Throughput (QPS) .......... B0: TODO
+
+--------------------------------------------------------------------------------
+G. RELIABILITY / OPERATIONS
+--------------------------------------------------------------------------------
+ G1  Error rate ................ 0/12 eval calls.        B0: MEASURED
+ G2  Timeout rate .............. 0/12 eval calls.        B0: MEASURED
+ G3  Reranker fallback rate .... 0 observed; the reranker disables itself on
+     CUDA OOM and keeps retrieval order.                 B0: PARTIAL
+ G4  Index fingerprint check ... startup check passed: 1,298,998 rows,
+     1024 dims.                                          B0: MEASURED
+ G5  Crash-free runs ........... 12/12 eval calls completed. B0: MEASURED
+ G6  Rate-limit behaviour ...... not exercised (benchmark raises the limit).
+                                                         B0: TODO
+ G7  PII guard ................. configured, not covered by the 12-question eval.
+                                                         B0: TODO (add PII cases)
+
+--------------------------------------------------------------------------------
+H. USER EXPERIENCE (BROWSER CONSOLE)
+--------------------------------------------------------------------------------
+ H1  Streamed vs full latency .. perceived latency with SSE. B0: TODO
+ H2  Citation cards ............ 12 cards rendered, company/section metadata
+     visible.                                           B0: PASS (manual)
+ H3  Diagnostics panel ......... status, guards, sources, neighbours, tokens,
+     timings visible.                                   B0: PASS (manual)
+ H4  Console errors ............ 0 during manual verification. B0: PASS (manual)
+
+
+================================================================================
+7. CHANGE LOG
+================================================================================
+
+ENTRY B0 | 2026-10-19 | BASELINE - current system, no optimizations
+--------------------------------------------------------------------------------
+ Change: none. First measurement of the current 14-step pipeline.
+ Performance:
+   mean 26,714 ms | median 27,597 ms | p95 32,038 ms (n=5, guards on)
+   retrieval-only mean 1,846 ms | rerank 1,541 ms (83.5%)
+   generation 21,425 ms = 80.2% of E2E
+   answerable eval mean 28,065 ms | p95 32,929 ms (n=6)
+ Quality:
+   answer rate 100% (6/6), refusal accuracy 66.7% (2/3),
+   injection detection 100% (3/3), overall behaviour 91.7% (11/12),
+   grounding pass 100% (6/6), citation validity 100% (6/6)
+ Cache:
+   no caches implemented; prompt/KV cache not instrumented; hit rate N/A
+ Known issues: D1-D8 above.
+ Artifacts: bench_query_results.json, bench_retrieval_results.json,
+            eval_results_baseline.json
+ Verdict: baseline frozen.
+
+--------------------------------------------------------------------------------
+ENTRY E1 | 2026-10-19 | Broaden no-answer detection (D1)
+--------------------------------------------------------------------------------
+ Hypothesis:
+   The model's refusal wording varies ("I couldn't find the current stock
+   price of Apple Inc. (AAPL) on the NASDAQ in the provided filings"), and the
+   exact-marker check misses it. Broaden detection and make the terminal status
+   reflect a partial/no answer even when supporting citations are returned.
+
+ Change:
+   - src/rag_query/domain/citations.py
+       normalise whitespace; add refusal-shape regexes for "couldn't/could not/
+       can't/unable to find ... in the provided filings|context|documents",
+       "not found/provided in ...", "the filings do not contain the answer",
+       "the answer is not provided in the context".
+   - src/rag_query/nodes/format.py
+       is_no_answer() now sets NO_CONTEXT regardless of citations; the answer
+       and its supporting sources are still returned.
+   - tests/test_rag_domain.py, tests/test_query_rag.py
+       add variant wording + partial-answer/citations cases.
+   - Config/behaviour: unchanged; no model or retrieval change.
+
+ Command / n / question set:
+   .\.venv\Scripts\python.exe scripts\eval_rag.py --out eval_results_e1.json
+   same 12 labelled questions as B0.
+
+ Performance before -> after (not attributed to E1):
+   answerable mean: 28,065 ms -> 25,853 ms (-2,212 ms, -7.9%)
+   all 12 mean:     17,035 ms -> 15,101 ms
+   refusal path:    11,398-11,738 ms -> 7,520-8,693 ms
+   These are run-to-run variance / shorter refusal text, not a code speedup.
+   E1 does not change retrieval or generation.
+
+ Quality guardrail before -> after:
+   answer rate:          100.0% -> 100.0%
+   refusal accuracy:      66.7% -> 100.0%  (+33.3 pp)
+   injection detection:  100.0% -> 100.0%
+   overall behaviour:     91.7% -> 100.0%  (+8.3 pp)
+   grounding pass:       100.0% -> 100.0%
+   citation validity:    100.0% -> 100.0%
+   guard false positive:   0.0% -> 0.0%
+
+ Behavioural detail:
+   refuse-live-price: status answered -> no_context; the useful answer and its
+   12 supporting citations are still returned. This is a status/metric fix,
+   not a factual-accuracy improvement.
+
+ Raw artifact: eval_results_e1.json
+ Limitations: only 3 refusal cases; the detector is still heuristic; answer
+   correctness remains unmeasured without gold answers.
+ Verdict: keep.
+
+--------------------------------------------------------------------------------
+ENTRY E2 | 2026-10-19 | Prompt-cache and token telemetry (measurement only)
+--------------------------------------------------------------------------------
+ Hypothesis:
+   llama.cpp reports prompt-cache reuse and split timings per request
+   (``timings.cache_n``, ``timings.prompt_n``, ``timings.prompt_ms``,
+   ``timings.predicted_ms``) plus ``usage.prompt_tokens_details.cached_tokens``.
+   Capturing them makes every later optimization measurable instead of guessed.
+
+ Change (no behaviour change):
+   - src/rag_query/domain/models.py
+       Generation gains cached_tokens, cache_hit_rate, prompt_eval_tokens,
+       prompt_eval_ms, decode_ms, prompt_eval_tokens_per_s, decode_tokens_per_s.
+   - src/rag_query/adapters/llm/openai_compat.py
+       parse usage details and the top-level timings block; expose
+       last_timings; send an explicit ``cache_prompt`` request field.
+   - src/rag_query/adapters/generation/llm_generator.py
+       map the telemetry into Generation (falls back to usage when a server
+       does not return timings).
+   - src/rag_query/config.py + wiring.py
+       RAG_LLM_CACHE_PROMPT (default true) so cache-on/off A/B runs need no
+       code edit.
+   - src/rag_query/static/index.html
+       diagnostics show cache hit, prompt eval, decode ms and tok/s.
+   - scripts/eval_rag.py, scripts/bench_query.py
+       artefacts now record tokens, cache hit rate and throughput.
+   - tests/test_llm_telemetry.py
+       3 tests: parsing, Generation mapping, cache_prompt=false payload.
+
+ Verification (direct llama.cpp calls, cache_prompt=true):
+   A1: prompt_n=522 cache_n=0     prompt_ms=881.5
+   B1: prompt_n=506 cache_n=16    prompt_ms=645.0   (system prefix only)
+   A2: prompt_n=4   cache_n=518   prompt_ms=114.5   (A prompt still cached)
+   B2: prompt_n=4   cache_n=518   prompt_ms=120.8
+   B3/A3: prompt_n=4 cache_n=518  prompt_ms=135.3
+   Confirms: cache_n is reused tokens, prompt_n is evaluated tokens, and the
+   server keeps more than one cached prompt (B did not evict A).
+
+ Command / n / question set:
+   .\.venv\Scripts\python.exe scripts\eval_rag.py --out eval_results_e2.json
+   same 12 labelled questions as B0/E1.
+
+ Measured telemetry (answerable runs, n=6):
+   prompt/query       5,244 tokens
+   cached/query       5,240 tokens   cache_hit 99.9%
+   completion/query     573 tokens
+   decode throughput   34.2 tok/s
+   end-to-end generation (incl. prompt eval) 31.3 tok/s
+
+ CRITICAL CAVEAT: the 99.9% hit rate is inflated. The 12 questions were already
+ sent to the same long-lived llama.cpp process during B0 and E1, and the server
+ retained those prompts in its multi-entry cache. It is NOT the hit rate a
+ brand-new user query sees. E3 measures cold vs warm properly.
+
+ Quality guardrail: answer rate 100%, refusal 100%, injection detection 100%,
+   overall behaviour 100%, grounding 100%, citation validity 100% (unchanged
+   from E1; instrumentation cannot alter answers).
+ Performance before -> after: not applicable. Answerable mean moved
+   25,853 ms -> 24,569 ms but that is run-to-run variance, not an E2 effect.
+ Raw artifact: eval_results_e2.json
+ Verdict: keep (observability only).
+
+--------------------------------------------------------------------------------
+ENTRY E3 | 2026-10-19 | Prompt/KV cache A/B on a repeated query
+--------------------------------------------------------------------------------
+ Hypothesis:
+   llama.cpp reuses the longest cached prompt prefix. For a repeated identical
+   RAG query the whole ~5,040-token prompt should hit, so prompt-evaluation time
+   should collapse while decode time is unchanged. A brand-new prompt should
+   get little or no reuse.
+
+ Change:
+   - No retrieval/generation algorithm change.
+   - RAG_LLM_CACHE_PROMPT (added in E2) is sent explicitly as ``cache_prompt``.
+   - scripts/bench_prompt_cache.py: repeat-query probe reporting wall, generate,
+     prompt-eval, cache hit and decode throughput per run.
+   - App restarted once with RAG_LLM_CACHE_PROMPT=false and once with true; the
+     llama.cpp server (and its KV cache) was kept running across both.
+
+ Command / n:
+   .\\.venv\\Scripts\\python.exe scripts\\bench_prompt_cache.py `
+       --query "What are Amazon.com's main risk factors in 2020?" `
+       --repeats 3 --label cache-off --out prompt_cache_off.json
+   (same command with --label cache-on --out prompt_cache_on.json)
+   Amazon was chosen because no earlier eval/benchmark used it, making run 1 a
+   genuine cold prompt.
+
+ Measurements (5,040 prompt tokens; completion 604-681 tokens):
+   config / run             cache hit   prompt eval   generate    wall
+   -------------------------------------------------------------------------
+   off, 3 runs (mean)          0.0%      3,631 ms    20,982 ms   32,368 ms
+   on, run 1 (cold)            0.0%      3,474 ms    22,689 ms   41,077 ms
+   on, runs 2-3 (warm mean)   99.9%        148 ms    19,667 ms   26,531 ms
+
+   Warm vs cache-off:
+     cache hit:        0.0% -> 99.9%           (5,036 / 5,040 tokens reused)
+     prompt eval:  3,631 ms -> 148 ms          (-3,483 ms, -95.9%)
+     generate:    20,982 ms -> 19,667 ms       (-1,315 ms, -6.3%; noisy)
+     wall:        32,368 ms -> 26,531 ms       (-5,837 ms, -18.0%)
+     wall median: 29,711 ms -> 26,531 ms       (-3,180 ms, -10.7%)
+
+ Interpretation:
+   The prompt-eval saving is direct and repeatable: 4 tokens evaluated instead
+   of 5,040. The end-to-end saving is smaller and has high variance (n=3 off,
+   n=2 warm; one warm decode run was an outlier at 25.8 tok/s), so quote the
+   -95.9% prompt-eval result and only ~11-18% end-to-end for repeated queries.
+   A new prompt gets no meaningful reuse (cold hit 0%), so this is not a
+   cold-query speedup. The E2 eval's 99.9% was the same effect after re-running
+   the same question set against a long-lived server.
+
+ Quality guardrail: all probe runs answered with 12 citations; no prompt,
+   retrieval or guard setting changed. No full eval was needed for this A/B.
+ Raw artifacts: prompt_cache_on.json, prompt_cache_off.json
+ Verdict: keep cache_prompt=true as the default; report it as a repeat-query
+   optimization, not as a general latency reduction.
+
+--------------------------------------------------------------------------------
+ENTRY TEMPLATE - copy for every experiment
+--------------------------------------------------------------------------------
+ ENTRY E__ | YYYY-MM-DD | short title
+ ------------------------------------------------------------------------------
+ Hypothesis:
+ Change (files + config before -> after):
+ Command / n / question set:
+ Performance before -> after:
+   mean:        ____ ms -> ____ ms   (delta: ____ ms, ____%)
+   p50:         ____ ms -> ____ ms
+   p95:         ____ ms -> ____ ms
+   step change: ____________________
+ Quality guardrail before -> after:
+   answer rate: ____% -> ____% | refusal: ____% -> ____%
+   grounding:   ____% -> ____% | citation validity: ____% -> ____%
+ Cache (if applicable):
+   hit rate ____% -> ____% | prompt tokens saved: ____ | cache memory: ____
+ Raw artifact:
+ Limitations / what this does NOT prove:
+ Verdict: keep / revert
+
+--------------------------------------------------------------------------------
+BACKLOG - candidate experiments (hypotheses, not measured results)
+--------------------------------------------------------------------------------
+ E1  Broaden no-answer detection  -> DONE (see ENTRY E1)
+     Result: refusal accuracy 66.7% -> 100%, overall behaviour 91.7% -> 100%.
+     Latencies unchanged within run-to-run variance; answerable questions stayed
+     answered. This was a status/metric fix, not model quality.
+
+ E2  Instrument prompt/KV cache and token usage  -> DONE (see ENTRY E2)
+     Result: cache_n/prompt_n/prompt_ms/predicted_ms parsed into Generation and
+     surfaced in the API, UI, eval and benchmark JSON. Found that the eval's
+     99.9% hit rate was an artefact of re-running the same questions against a
+     long-lived llama.cpp cache; cold/warm measurement moved to E3.
+
+ E3  Prompt/KV cache A/B  -> DONE (see ENTRY E3)
+     Result: repeated query cache hit 0% -> 99.9%, prompt-eval 3,631 ms ->
+     148 ms (-95.9%), end-to-end 32.4 s -> 26.5 s (-18.0%, noisy, n=3/2).
+     No benefit for a genuinely new prompt (cold hit 0%). Cache remains on by
+     default; report as a repeat-query optimization.
+
+ E4  Rewrite cache (normalized query -> rewrite)
+     Expected hit saving: ~2,142 ms mean rewrite time (8.0% of E2E).
+     Guardrail: rewrite quality unchanged; cache key must include model/config.
+
+ E4  Rerank cache (query + candidate ids -> scores)
+     Expected hit saving: ~1,541 ms (the largest retrieval-side win).
+     Guardrail: NDCG/manual relevance unchanged; invalidate on reranker change.
+
+ E5  Embedding cache (normalized query -> 1024-d vector)
+     Expected hit saving: ~56-290 ms depending on path.
+     Guardrail: vector fingerprint/model/dimension must be part of the key.
+
+ E6  Retrieval cache (filters + rewritten query -> fused candidates)
+     Expected hit saving: ~200 ms; mostly useful for repeated benchmark/demo
+     queries. Guardrail: ACL and index fingerprint in the key.
+
+ E7  Answer cache (query + filters + ACL + prompt version -> full AskResult)
+     Near-zero latency on hits, but highest risk: ACL/session isolation, stale
+     answers, feedback semantics. Only pursue if repeat traffic justifies it.
+
+ E8  Context budget tuning (6,500 -> 4,000 tokens)
+     Expected: lower prompt-eval time and generation input; risk of losing
+     evidence. Guardrails: answer rate, grounding, citation validity, manual
+     spot-check on the 12-question set.
+
+ E9  Reranker optimization (batch size, max_length, ONNX/quantization)
+     Target: reduce the 1,541 ms retrieval-only rerank cost by 30-50%.
+     Guardrail: rerank lift / relevance must not collapse. CPU fallback is
+     deliberately off (~9 s per candidate), so do not use it as a speedup.
+
+ E10 Output guard optimization (cache source embeddings, batch checks)
+     Target: cut the 548-853 ms output-guard cost by ~50%.
+     Guardrail: same block/allow decisions on the labelled set.
+
+ E11 Parallelize independent work
+     Input guard + history load are independent; rewrite must precede retrieval.
+     Expected saving: a few hundred ms at most. Measure, do not assume.
+
+ E12 Generation optimization (the only large E2E lever)
+     Options: streaming TTFT, concise-answer prompt, max-token cap, speculative
+     decoding in llama.cpp. Guardrail: answer completeness and grounding.
+     Any 10%+ E2E claim will come from here, not from retrieval caching.
+
+ Reporting rule: E1 changes a metric definition/status; do not present it as an
+ accuracy improvement in a resume. E3-E7 only help repeated queries - report the
+ cache hit rate alongside the hit latency, otherwise the "speedup" is misleading.
+
+================================================================================
+8. HOW TO REPRODUCE B0
+================================================================================
+
+ Terminal 1 - LLM server:
+   .\scripts\serve_llm.ps1
+
+ Terminal 2 - application:
+   .\.venv\Scripts\python.exe -m uvicorn rag_query.api:create_app --factory `
+       --host 127.0.0.1 --port 8080
+
+ Full latency benchmark (5 questions, guards on):
+   .\.venv\Scripts\python.exe scripts\bench_query.py --repeat 1 `
+       --out bench_query_results.json
+
+ Retrieval-only benchmark (10 runs):
+   .\.venv\Scripts\python.exe scripts\bench_query.py --retrieval-only `
+       --repeat 2 --out bench_retrieval_results.json
+
+ Behaviour evaluation (12 labelled questions):
+   .\.venv\Scripts\python.exe scripts\eval_rag.py `
+       --out eval_results_baseline.json
+
+ Tests:
+   .\.venv\Scripts\python.exe -m pytest -q
+   # read-only Postgres integration suite (gated, never truncates the corpus):
+   $env:RAG_QUERY_TEST_POSTGRES_DSN = "<dsn>"
+   .\.venv\Scripts\python.exe -m pytest -q tests\test_query_postgres_integration.py
+
+ Notes:
+   - Run evaluation against the HTTP API so latency includes the real request
+     path. Do not rebuild models inside the eval script while the app is also
+     holding GPU memory.
+   - Keep llama.cpp and uvicorn running for the whole before/after series.
+   - Delete only the eval/demo turns in query_turns/answer_feedback when the
+     session ids start with "eval-"; never truncate documents/chunks/embeddings.
+
+================================================================================
+END OF B0
+================================================================================
